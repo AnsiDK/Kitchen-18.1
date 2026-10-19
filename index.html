@@ -101,6 +101,7 @@
     <div class="card">
       <p class="muted">Join code</p>
       <p class="code" id="h-code"></p>
+      <input id="h-link" readonly aria-label="Join link">
       <button class="ghost" id="copy">Copy join link</button>
     </div>
     <div class="card">
@@ -190,9 +191,17 @@
     if (!key) { $('join-error').textContent = 'You are not the host of ' + code; return show('home'); }
     const link = location.origin + '/?join=' + code;
     $('h-code').textContent = code;
+    $('h-link').value = link;
+    $('h-link').onfocus = () => $('h-link').select();
     $('copy').onclick = async () => {
-      try { await navigator.clipboard.writeText(link); $('copy').textContent = 'Copied!'; }
-      catch { prompt('Copy this link', link); }
+      try { await navigator.clipboard.writeText(link); }
+      catch {
+        // navigator.clipboard is missing on plain http (e.g. a phone on the LAN IP), so copy from the visible field
+        $('h-link').select();
+        $('h-link').setSelectionRange(0, link.length);
+        if (!document.execCommand('copy')) return void ($('copy').textContent = 'Copy the link above');
+      }
+      $('copy').textContent = 'Copied!';
     };
     $('reveal').onclick = async () => {
       if (!confirm('Close the round and reveal results? No more guesses after this.')) return;
