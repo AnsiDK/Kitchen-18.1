@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: closest-guess
+    runtime: node
+    plan: free
+    buildCommand: "true"
+    startCommand: npm start

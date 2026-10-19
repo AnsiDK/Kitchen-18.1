@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Closest Guess</title>
+<style>
+  :root {
+    --bg: #0b0b0f; --card: #15151c; --line: #26262f; --text: #ededf2; --muted: #8b8b99;
+    --accent: #8b7cff; --good: #3ddc97; --bad: #ff6b6b; --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; justify-content: center; padding: 48px 16px;
+  }
+  main { width: 100%; max-width: 440px; }
+  h1 { font-size: 15px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 32px; }
+  h1 a { color: inherit; text-decoration: none; }
+  h2 { font-size: 22px; margin: 0 0 16px; font-weight: 600; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; margin-bottom: 16px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 0 0 6px; }
+  input {
+    width: 100%; padding: 12px 14px; margin-bottom: 16px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); font: inherit;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  button {
+    width: 100%; padding: 12px; border: 0; border-radius: 10px; background: var(--accent); color: #fff;
+    font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button:hover { filter: brightness(1.1); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
+  .muted { color: var(--muted); font-size: 14px; }
+  .error { color: var(--bad); font-size: 14px; min-height: 1.5em; margin: 8px 0 0; }
+  .code { font-size: 48px; font-weight: 700; letter-spacing: .2em; margin: 4px 0 12px; font-variant-numeric: tabular-nums; }
+  .question { font-size: 20px; font-weight: 500; margin: 0 0 20px; }
+  .target { font-size: 40px; font-weight: 700; margin: 0; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+  li:first-child { border-top: 0; }
+  li .name { flex: 1; overflow-wrap: anywhere; }
+  li .val { font-variant-numeric: tabular-nums; font-weight: 600; }
+  li .dist { color: var(--muted); font-size: 13px; min-width: 56px; text-align: right; }
+  .tag { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 3px 8px; border-radius: 99px; }
+  .closest .tag { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+  .furthest .tag { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+  .done { font-size: 40px; margin: 0 0 8px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1><a href="/">Closest Guess</a></h1>
+
+  <section id="home" hidden>
+    <form class="card" id="create-form">
+      <h2>Host a round</h2>
+      <label for="q">Question</label>
+      <input id="q" maxlength="200" required placeholder="How many grains of rice in the jar?">
+      <label for="t">Correct answer</label>
+      <input id="t" type="number" step="any" required inputmode="decimal" placeholder="1234">
+      <button>Create session</button>
+      <p class="error" id="create-error" role="alert"></p>
+    </form>
+    <form class="card" id="join-form">
+      <h2>Join a round</h2>
+      <label for="c">Session code</label>
+      <input id="c" maxlength="4" required autocapitalize="characters" autocomplete="off" placeholder="ABCD">
+      <button class="ghost">Join</button>
+      <p class="error" id="join-error" role="alert"></p>
+    </form>
+  </section>
+
+  <section id="guess" hidden>
+    <form class="card" id="guess-form">
+      <p class="muted">Session <span id="g-code"></span></p>
+      <p class="question" id="g-question"></p>
+      <label for="n">Your name</label>
+      <input id="n" maxlength="30" required autocomplete="nickname">
+      <label for="v">Your guess</label>
+      <input id="v" type="number" step="any" required inputmode="decimal">
+      <button>Lock in guess</button>
+      <p class="muted">You only get one guess.</p>
+      <p class="error" id="guess-error" role="alert"></p>
+    </form>
+  </section>
+
+  <section id="waiting" hidden>
+    <div class="card">
+      <p class="done">✓</p>
+      <h2>Guess locked in</h2>
+      <p class="muted">Your guess: <strong id="w-guess"></strong>. The host will reveal the results.</p>
+    </div>
+  </section>
+
+  <section id="host" hidden>
+    <div class="card">
+      <p class="muted">Join code</p>
+      <p class="code" id="h-code"></p>
+      <button class="ghost" id="copy">Copy join link</button>
+    </div>
+    <div class="card">
+      <p class="question" id="h-question"></p>
+      <div id="h-answer" hidden>
+        <p class="muted">Correct answer</p>
+        <p class="target" id="h-target"></p>
+      </div>
+      <p class="muted" id="h-count"></p>
+    </div>
+    <div class="card" id="h-list-card" hidden><ul id="h-list"></ul></div>
+    <button id="reveal">Reveal results</button>
+  </section>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const params = new URLSearchParams(location.search);
+  const store = {
+    get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+    set: (k, v) => { try { localStorage.setItem(k, v); } catch {} },
+  };
+
+  async function call(method, url, body, hostKey) {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', ...(hostKey && { 'x-host-key': hostKey }) },
+      body: body && JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Something went wrong');
+    return data;
+  }
+
+  function show(id) {
+    for (const s of document.querySelectorAll('main > section')) s.hidden = s.id !== id;
+  }
+
+  const fmt = (n) => +n.toFixed(4);
+
+  // Home
+  $('create-form').onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const { code, hostKey } = await call('POST', '/api/sessions', { question: $('q').value, target: Number($('t').value) });
+      store.set('host:' + code, hostKey);
+      location.search = '?host=' + code;
+    } catch (err) { $('create-error').textContent = err.message; }
+  };
+  $('join-form').onsubmit = (e) => {
+    e.preventDefault();
+    location.search = '?join=' + $('c').value.trim().toUpperCase();
+  };
+
+  // Player
+  async function joinView(code) {
+    const mine = store.get('guess:' + code);
+    if (mine !== null) { $('w-guess').textContent = mine; return show('waiting'); }
+    try {
+      const s = await call('GET', '/api/sessions/' + code);
+      if (s.closed) throw new Error('This round is already closed');
+      $('g-code').textContent = code;
+      $('g-question').textContent = s.question;
+      $('n').value = store.get('name') || '';
+      show('guess');
+    } catch (err) {
+      $('join-error').textContent = err.message;
+      $('c').value = code;
+      show('home');
+    }
+    $('guess-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const guess = Number($('v').value);
+      try {
+        await call('POST', `/api/sessions/${code}/guesses`, { name: $('n').value, guess });
+        store.set('name', $('n').value.trim());
+        store.set('guess:' + code, guess);
+        $('w-guess').textContent = guess;
+        show('waiting');
+      } catch (err) { $('guess-error').textContent = err.message; }
+    };
+  }
+
+  // Host
+  async function hostView(code) {
+    const key = store.get('host:' + code);
+    if (!key) { $('join-error').textContent = 'You are not the host of ' + code; return show('home'); }
+    const link = location.origin + '/?join=' + code;
+    $('h-code').textContent = code;
+    $('copy').onclick = async () => {
+      try { await navigator.clipboard.writeText(link); $('copy').textContent = 'Copied!'; }
+      catch { prompt('Copy this link', link); }
+    };
+    $('reveal').onclick = async () => {
+      if (!confirm('Close the round and reveal results? No more guesses after this.')) return;
+      await call('POST', `/api/sessions/${code}/close`, null, key);
+      refresh();
+    };
+    show('host');
+
+    let timer;
+    async function refresh() {
+      clearTimeout(timer);
+      let s;
+      try { s = await call('GET', '/api/sessions/' + code, null, key); }
+      catch (err) { $('h-count').textContent = err.message; return; }
+      $('h-question').textContent = s.question;
+      $('h-count').textContent = s.guesses.length + (s.guesses.length === 1 ? ' guess' : ' guesses') + (s.closed ? '' : ' so far');
+      $('reveal').hidden = s.closed;
+      $('h-answer').hidden = !s.closed;
+      $('h-target').textContent = s.target;
+      $('h-list-card').hidden = !s.guesses.length;
+
+      const rows = s.guesses.map((g) => ({ ...g, dist: Math.abs(g.guess - s.target) }));
+      if (s.closed) rows.sort((a, b) => a.dist - b.dist);
+      const min = rows[0]?.dist, max = rows.at(-1)?.dist;
+      $('h-list').replaceChildren(...rows.map((g) => {
+        const li = document.createElement('li');
+        const el = (cls, text) => { const x = document.createElement('span'); x.className = cls; x.textContent = text; return x; };
+        li.append(el('name', g.name));
+        if (s.closed) {
+          // ties share the badge; with a single guess it's only "closest"
+          const tag = g.dist === min ? 'closest' : g.dist === max ? 'furthest' : '';
+          if (tag) { li.className = tag; li.append(el('tag', tag)); }
+          li.append(el('val', g.guess), el('dist', '±' + fmt(g.dist)));
+        } else {
+          li.append(el('muted', 'guessed'));
+        }
+        return li;
+      }));
+      if (!s.closed) timer = setTimeout(refresh, 2000);
+    }
+    refresh();
+  }
+
+  if (params.get('host')) hostView(params.get('host').toUpperCase());
+  else if (params.get('join')) joinView(params.get('join').toUpperCase());
+  else show('home');
+</script>
+</body>
+</html>
