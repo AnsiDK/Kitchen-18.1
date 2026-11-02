@@ -62,7 +62,7 @@
       <label for="q">Question</label>
       <input id="q" maxlength="200" required placeholder="How many grains of rice in the jar?">
       <label for="t">Correct answer</label>
-      <input id="t" type="number" step="any" required inputmode="decimal" placeholder="1234">
+      <input id="t" required inputmode="decimal" autocomplete="off" placeholder="1.234">
       <button>Create session</button>
       <p class="error" id="create-error" role="alert"></p>
     </form>
@@ -82,7 +82,7 @@
       <label for="n">Your name</label>
       <input id="n" maxlength="30" required autocomplete="nickname">
       <label for="v">Your guess</label>
-      <input id="v" type="number" step="any" required inputmode="decimal">
+      <input id="v" required inputmode="decimal" autocomplete="off">
       <button>Lock in guess</button>
       <p class="muted">You only get one guess.</p>
       <p class="error" id="guess-error" role="alert"></p>
@@ -140,13 +140,26 @@
     for (const s of document.querySelectorAll('main > section')) s.hidden = s.id !== id;
   }
 
-  const fmt = (n) => +n.toFixed(4);
+  // Danish style: 1.000 groups thousands, comma is the decimal mark
+  const fmt = (n) => Number(n).toLocaleString('da-DK', { maximumFractionDigits: 4 });
+  const parse = (str) => Number(str.replace(/\./g, '').replace(',', '.'));
+  // type="number" can't show separators, so number fields are text fields regrouped as you type
+  for (const inp of [$('t'), $('v')]) inp.oninput = () => {
+    const kept = /[-\d,]/;
+    const before = [...inp.value.slice(0, inp.selectionStart)].filter((c) => kept.test(c)).length;
+    const [int, ...frac] = inp.value.replace(/[^\d,]/g, '').split(',');
+    let v = (inp.value.trim().startsWith('-') ? '-' : '') + int.replace(/\B(?=(\d{3})+$)/g, '.') + (frac.length ? ',' + frac.join('') : '');
+    inp.value = v;
+    let pos = 0;
+    for (let n = 0; pos < v.length && n < before; pos++) if (kept.test(v[pos])) n++;
+    inp.setSelectionRange(pos, pos);
+  };
 
   // Home
   $('create-form').onsubmit = async (e) => {
     e.preventDefault();
     try {
-      const { code, hostKey } = await call('POST', '/api/sessions', { question: $('q').value, target: Number($('t').value) });
+      const { code, hostKey } = await call('POST', '/api/sessions', { question: $('q').value, target: parse($('t').value) });
       store.set('host:' + code, hostKey);
       location.search = '?host=' + code;
     } catch (err) { $('create-error').textContent = err.message; }
@@ -159,7 +172,7 @@
   // Player
   async function joinView(code) {
     const mine = store.get('guess:' + code);
-    if (mine !== null) { $('w-guess').textContent = mine; return show('waiting'); }
+    if (mine !== null) { $('w-guess').textContent = fmt(mine); return show('waiting'); }
     try {
       const s = await call('GET', '/api/sessions/' + code);
       if (s.closed) throw new Error('This round is already closed');
@@ -174,12 +187,12 @@
     }
     $('guess-form').onsubmit = async (e) => {
       e.preventDefault();
-      const guess = Number($('v').value);
+      const guess = parse($('v').value);
       try {
         await call('POST', `/api/sessions/${code}/guesses`, { name: $('n').value, guess });
         store.set('name', $('n').value.trim());
         store.set('guess:' + code, guess);
-        $('w-guess').textContent = guess;
+        $('w-guess').textContent = fmt(guess);
         show('waiting');
       } catch (err) { $('guess-error').textContent = err.message; }
     };
@@ -220,7 +233,7 @@
       $('h-count').textContent = s.guesses.length + (s.guesses.length === 1 ? ' guess' : ' guesses') + (s.closed ? '' : ' so far');
       $('reveal').hidden = s.closed;
       $('h-answer').hidden = !s.closed;
-      $('h-target').textContent = s.target;
+      $('h-target').textContent = fmt(s.target);
       $('h-list-card').hidden = !s.guesses.length;
 
       const rows = s.guesses.map((g) => ({ ...g, dist: Math.abs(g.guess - s.target) }));
@@ -234,7 +247,7 @@
           // ties are broken by speed, so one closest and one furthest; with a single guess it's only "closest"
           const tag = i === 0 ? 'closest' : i === rows.length - 1 ? 'furthest' : '';
           if (tag) { li.className = tag; li.append(el('tag', tag)); }
-          li.append(el('val', g.guess), el('dist', '±' + fmt(g.dist)));
+          li.append(el('val', fmt(g.guess)), el('dist', '±' + fmt(g.dist)));
         } else {
           li.append(el('muted', 'guessed'));
         }
