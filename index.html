@@ -224,15 +224,15 @@
       $('h-list-card').hidden = !s.guesses.length;
 
       const rows = s.guesses.map((g) => ({ ...g, dist: Math.abs(g.guess - s.target) }));
+      // guesses arrive in submission order and sort is stable, so equal distances rank the faster guess first
       if (s.closed) rows.sort((a, b) => a.dist - b.dist);
-      const min = rows[0]?.dist, max = rows.at(-1)?.dist;
-      $('h-list').replaceChildren(...rows.map((g) => {
+      $('h-list').replaceChildren(...rows.map((g, i) => {
         const li = document.createElement('li');
         const el = (cls, text) => { const x = document.createElement('span'); x.className = cls; x.textContent = text; return x; };
         li.append(el('name', g.name));
         if (s.closed) {
-          // ties share the badge; with a single guess it's only "closest"
-          const tag = g.dist === min ? 'closest' : g.dist === max ? 'furthest' : '';
+          // ties are broken by speed, so one closest and one furthest; with a single guess it's only "closest"
+          const tag = i === 0 ? 'closest' : i === rows.length - 1 ? 'furthest' : '';
           if (tag) { li.className = tag; li.append(el('tag', tag)); }
           li.append(el('val', g.guess), el('dist', '±' + fmt(g.dist)));
         } else {
